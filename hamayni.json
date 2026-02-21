@@ -1,0 +1,165 @@
+{
+  "contract_version": "1.1.0",
+  "template_id": "supabase-self-hosted",
+  "template_version": "1.0.0",
+  "name": "Supabase Self-Hosted",
+  "description": "Plateforme backend open source avec base de données Postgres, authentification, stockage et API temps réel",
+  "artifact_type": "docker_stack",
+  "source_ref": {
+    "type": "tag",
+    "value": "v1.0.0"
+  },
+  "prerequisites": [
+    "docker",
+    "docker-compose"
+  ],
+  "runtime": {
+    "kind": "docker-compose",
+    "compose_file": "docker-compose.yml",
+    "ports": {
+      "http": 8080
+    }
+  },
+  "env": [
+    {
+      "name": "DB_PASSWORD",
+      "required": true,
+      "description": "Mot de passe canonique pour tous les rôles Postgres",
+      "default": "supabase"
+    },
+    {
+      "name": "JWT_SECRET",
+      "required": true,
+      "description": "Secret JWT (minimum 32 caractères)",
+      "default": "your-super-secret-jwt-token-with-at-least-32-characters"
+    },
+    {
+      "name": "ANON_KEY",
+      "required": true,
+      "description": "Clé JWT pour le rôle anonyme",
+      "default": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiJ9"
+    },
+    {
+      "name": "SERVICE_ROLE_KEY",
+      "required": true,
+      "description": "Clé JWT pour le rôle service",
+      "default": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0."
+    },
+    {
+      "name": "API_EXTERNAL_URL",
+      "required": true,
+      "description": "URL publique de l'API Supabase",
+      "default": "https://${DOMAIN}/supabase"
+    },
+    {
+      "name": "SITE_URL",
+      "required": true,
+      "description": "URL du frontend qui utilisera Supabase",
+      "default": "https://${DOMAIN}"
+    },
+    {
+      "name": "SMTP_HOST",
+      "required": false,
+      "description": "Serveur SMTP pour les emails",
+      "default": ""
+    },
+    {
+      "name": "SMTP_PORT",
+      "required": false,
+      "description": "Port SMTP",
+      "default": "587"
+    },
+    {
+      "name": "SMTP_USER",
+      "required": false,
+      "description": "Utilisateur SMTP",
+      "default": ""
+    },
+    {
+      "name": "SMTP_PASS",
+      "required": false,
+      "description": "Mot de passe SMTP",
+      "default": ""
+    }
+  ],
+  "health": {
+    "checks": [
+      {
+        "path": "http://localhost:8000/",
+        "expected_status": 200,
+        "timeout_s": 60
+      },
+      {
+        "path": "http://localhost:8000/auth/v1/health",
+        "expected_status": 200,
+        "timeout_s": 60
+      }
+    ],
+    "success_policy": "all"
+  },
+  "policies": {
+    "strict_mode": true,
+    "ban_latest": true,
+    "infra_requires_tag_or_commit": false
+  },
+  "credentials_spec": [
+    {
+      "key": "STUDIO_URL",
+      "label": "URL du Studio",
+      "computed": "https://${DOMAIN}/studio/"
+    },
+    {
+      "key": "API_URL",
+      "label": "URL de l'API",
+      "computed": "https://${DOMAIN}/supabase/"
+    },
+    {
+      "key": "AUTH_HEALTH",
+      "label": "Endpoint santé auth",
+      "computed": "https://${DOMAIN}/supabase/auth/v1/health"
+    },
+    {
+      "key": "ANON_KEY",
+      "label": "Clé anonyme",
+      "from_env": "ANON_KEY",
+      "hidden": true
+    },
+    {
+      "key": "SERVICE_ROLE_KEY",
+      "label": "Clé service role",
+      "from_env": "SERVICE_ROLE_KEY",
+      "hidden": true
+    },
+    {
+      "key": "DB_PASSWORD",
+      "label": "Mot de passe base de données",
+      "from_env": "DB_PASSWORD",
+      "hidden": true
+    },
+    {
+      "key": "JWT_SECRET",
+      "label": "Secret JWT",
+      "from_env": "JWT_SECRET",
+      "hidden": true
+    },
+    {
+      "key": "DASHBOARD_USER",
+      "label": "Utilisateur dashboard",
+      "static": "supabase"
+    },
+    {
+      "key": "DASHBOARD_PASSWORD",
+      "label": "Mot de passe dashboard",
+      "generated": true,
+      "hidden": true
+    }
+  ],
+  "postInstall": [
+    {
+      "type": "shell",
+      "cmd": "echo 'Supabase est en cours de démarrage...' && sleep 30 && echo 'Les services devraient être disponibles dans quelques minutes.'"
+    }
+  ],
+  "minAgentVersion": "2.5.0",
+  "tested": true
+}

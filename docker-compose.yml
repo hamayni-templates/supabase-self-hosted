@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # Base de données Postgres
+  # Base de donnÃ©es Postgres
   db:
     image: supabase/postgres:15.8.1.060
     container_name: supabase_db
@@ -140,7 +140,7 @@ services:
     networks:
       - supabase_network
 
-  # Service temps réel
+  # Service temps rÃ©el
   realtime:
     image: supabase/realtime:v2.30.34
     container_name: supabase_realtime
@@ -167,7 +167,7 @@ services:
     networks:
       - supabase_network
 
-  # Métadonnées Postgres
+  # MÃ©tadonnÃ©es Postgres
   meta:
     image: supabase/postgres-meta:v0.83.2
     container_name: supabase_meta
@@ -192,7 +192,7 @@ services:
   # Studio (optionnel - profile)
   studio:
     profiles: ["studio"]
-    image: supabase/studio:20241029-46e1e7f
+    image: supabase/studio:2026.02.16-sha-26c615c
     container_name: supabase_studio
     restart: unless-stopped
     depends_on:

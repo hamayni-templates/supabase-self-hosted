@@ -1,0 +1,263 @@
+version: '3.8'
+
+services:
+  # Base de données Postgres
+  db:
+    image: supabase/postgres:15.8.1.060
+    container_name: supabase_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-supabase}
+      POSTGRES_DB: postgres
+    volumes:
+      - ./volumes/db/data:/var/lib/postgresql/data
+      - ./volumes/db/roles.sql:/docker-entrypoint-initdb.d/01-roles.sql
+      - ./volumes/db/jwt.sql:/docker-entrypoint-initdb.d/02-jwt.sql
+      - ./volumes/db/realtime.sql:/docker-entrypoint-initdb.d/03-realtime.sql
+      - ./volumes/db/webhooks.sql:/docker-entrypoint-initdb.d/04-webhooks.sql
+      - ./volumes/db/logs.sql:/docker-entrypoint-initdb.d/05-logs.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - supabase_network
+
+  # API Gateway
+  kong:
+    image: kong:2.8.1
+    container_name: supabase_kong
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: db
+      KONG_PG_USER: postgres
+      KONG_PG_PASSWORD: ${DB_PASSWORD:-supabase}
+      KONG_PG_DATABASE: postgres
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_ADMIN_GUI_URL: http://localhost:8002
+    volumes:
+      - ./volumes/api/kong.yml:/usr/local/kong/declarative/kong.yml
+    command: kong start --vv
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - supabase_network
+
+  # Service d'authentification
+  auth:
+    image: supabase/gotrue:v2.164.0
+    container_name: supabase_auth
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-supabase}
+      DB_NAME: postgres
+      DB_SSLMODE: disable
+      GOTRUE_JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-token-with-at-least-32-characters}
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:3000}
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL:-http://localhost:8000}
+      GOTRUE_SMTP_HOST: ${SMTP_HOST:-}
+      GOTRUE_SMTP_PORT: ${SMTP_PORT:-587}
+      GOTRUE_SMTP_USER: ${SMTP_USER:-}
+      GOTRUE_SMTP_PASS: ${SMTP_PASS:-}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_USER:-}
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - supabase_network
+
+  # API REST automatique
+  rest:
+    image: postgrest/postgrest:v12.2.3
+    container_name: supabase_rest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://postgres:${DB_PASSWORD:-supabase}@db:5432/postgres
+      PGRST_DB_SCHEMA: public,storage
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-token-with-at-least-32-characters}
+      PGRST_OPENAPI_SERVER_PROXY_URI: ${API_EXTERNAL_URL:-http://localhost:8000}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - supabase_network
+
+  # Service de stockage
+  storage:
+    image: supabase/storage-api:v1.11.13
+    container_name: supabase_storage
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:${DB_PASSWORD:-supabase}@db:5432/postgres
+      PGRST_JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-token-with-at-least-32-characters}
+      FILE_STORAGE_BACKEND: local
+      FILE_STORAGE_LOCAL_PATH: /var/lib/storage
+      FILE_SIZE_LIMIT: 52428800
+      GLOBAL_S3_BUCKET: supabase
+      REGION: eu-west-1
+      TENANT_ID: stub
+      ANON_KEY: ${ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiJ9}
+      SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.}
+    volumes:
+      - ./volumes/storage:/var/lib/storage
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - supabase_network
+
+  # Service temps réel
+  realtime:
+    image: supabase/realtime:v2.30.34
+    container_name: supabase_realtime
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: postgres
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-supabase}
+      DB_SSLMODE: disable
+      PORT: 4000
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-token-with-at-least-32-characters}
+      SECURE_CHANNELS: "false"
+      SLOT_NAME: supabase_realtime_replication_slot
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - supabase_network
+
+  # Métadonnées Postgres
+  meta:
+    image: supabase/postgres-meta:v0.83.2
+    container_name: supabase_meta
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PG_META_DB_HOST: db
+      PG_META_DB_PORT: 5432
+      PG_META_DB_NAME: postgres
+      PG_META_DB_USER: postgres
+      PG_META_DB_PASSWORD: ${DB_PASSWORD:-supabase}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - supabase_network
+
+  # Studio (optionnel - profile)
+  studio:
+    profiles: ["studio"]
+    image: supabase/studio:20241029-46e1e7f
+    container_name: supabase_studio
+    restart: unless-stopped
+    depends_on:
+      - kong
+      - auth
+      - rest
+      - storage
+      - realtime
+    environment:
+      STUDIO_PG_META_URL: http://meta:8080
+      SUPABASE_URL: ${API_EXTERNAL_URL:-http://localhost:8000}
+      SUPABASE_ANON_KEY: ${ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiJ9}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.}
+      SUPABASE_DB_URL: postgres://postgres:${DB_PASSWORD:-supabase}@db:5432/postgres
+      SUPABASE_LOGFLARE_URL: http://analytics:4000
+      SUPABASE_VECTOR_URL: http://vector:8686
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - supabase_network
+
+  # Analytics (optionnel - profile)
+  analytics:
+    profiles: ["analytics"]
+    image: supabase/logflare:1.4.0
+    container_name: supabase_analytics
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:${DB_PASSWORD:-supabase}@db:5432/postgres
+      LOGFLARE_API_KEY: ${ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiJ9}
+      LOGFLARE_SINGLE_TENANT: "true"
+    networks:
+      - supabase_network
+
+  # Vector (optionnel - profile)
+  vector:
+    profiles: ["vector"]
+    image: timberio/vector:0.34.0-alpine
+    container_name: supabase_vector
+    restart: unless-stopped
+    volumes:
+      - ./volumes/vector/vector.toml:/etc/vector/vector.toml:ro
+    networks:
+      - supabase_network
+
+  # Imgproxy (optionnel - profile)
+  imgproxy:
+    profiles: ["imgproxy"]
+    image: darthsim/imgproxy:v3.24.1
+    container_name: supabase_imgproxy
+    restart: unless-stopped
+    environment:
+      IMGPROXY_BIND: :8081
+      IMGPROXY_LOCAL_FILESYSTEM_ROOT: /images
+    volumes:
+      - ./volumes/storage:/images
+    networks:
+      - supabase_network
+
+networks:
+  supabase_network:
+    driver: bridge

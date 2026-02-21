@@ -1,0 +1,18 @@
+# Vector configuration for Supabase Self-Hosted
+# Collects Docker container logs
+
+[sources.docker_logs]
+type = "docker_logs"
+
+[transforms.parse_logs]
+type = "remap"
+inputs = ["docker_logs"]
+source = '''
+.timestamp = now()
+.service = .container_name
+'''
+
+[sinks.stdout]
+type = "console"
+inputs = ["parse_logs"]
+encoding.codec = "json"

@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # Base de donnÃ©es Postgres
   db:
-    image: supabase/postgres:15.8.1.060
+    image: supabase/postgres:15.14.1.085
     container_name: supabase_db
     restart: unless-stopped
     environment:
@@ -58,7 +58,7 @@ services:
 
   # Service d'authentification
   auth:
-    image: supabase/gotrue:v2.164.0
+    image: supabase/gotrue:v2.185.0
     container_name: supabase_auth
     restart: unless-stopped
     depends_on:
@@ -91,7 +91,7 @@ services:
 
   # API REST automatique
   rest:
-    image: postgrest/postgrest:v12.2.3
+    image: postgrest/postgrest:v12.2.5
     container_name: supabase_rest
     restart: unless-stopped
     depends_on:
@@ -113,7 +113,7 @@ services:
 
   # Service de stockage
   storage:
-    image: supabase/storage-api:v1.11.13
+    image: supabase/storage-api:v1.34.0
     container_name: supabase_storage
     restart: unless-stopped
     depends_on:
@@ -142,7 +142,7 @@ services:
 
   # Service temps rÃ©el
   realtime:
-    image: supabase/realtime:v2.30.34
+    image: supabase/realtime:v2.76.1
     container_name: supabase_realtime
     restart: unless-stopped
     depends_on:
@@ -169,7 +169,7 @@ services:
 
   # MÃ©tadonnÃ©es Postgres
   meta:
-    image: supabase/postgres-meta:v0.83.2
+    image: supabase/postgres-meta:v0.91.7
     container_name: supabase_meta
     restart: unless-stopped
     depends_on:
@@ -220,7 +220,7 @@ services:
   # Analytics (optionnel - profile)
   analytics:
     profiles: ["analytics"]
-    image: supabase/logflare:1.4.0
+    image: supabase/logflare:1.32.5
     container_name: supabase_analytics
     restart: unless-stopped
     depends_on:
@@ -247,7 +247,7 @@ services:
   # Imgproxy (optionnel - profile)
   imgproxy:
     profiles: ["imgproxy"]
-    image: darthsim/imgproxy:v3.24.1
+    image: darthsim/imgproxy:v3.28.0
     container_name: supabase_imgproxy
     restart: unless-stopped
     environment:
